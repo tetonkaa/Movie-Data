@@ -1,0 +1,138 @@
+---
+title: "Movie Genre Trends"
+author: "Angel Puente"
+date: "2/7/2022"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Objective : In this case study, I will show how movie ratings effect revenues within each movie genre.
+  
+  To reach this goal we are going to be taking a look through a public data set provided by [Rounak Banik](https://www.kaggle.com/rounakbanik/the-movies-dataset).
+
+
+
+## Setting up work enviornment
+ We will be conducting this analysis through R studio. Before we can perform analysis, I set up my rproject with the necessary packages.
+
+```{r}
+install.packages("tidyverse", repos = "http://cran.us.r-project.org/%22")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+install.packages("reshape", repos = "http://cran.us.r-project.org")
+install.packages("ggthemes", repos = "http://cran.us.r-project.org")
+library(ggthemes)
+library(tidyverse)
+library(ggplot2)
+
+```
+## Importing Data
+
+```{r}
+ratings<- read.csv("C:\\Users\\Angel\\Documents\\Case Study-Laptop\\Movie CSV\\ratings.csv")
+movies_metadata<- read.csv("C:\\Users\\Angel\\Documents\\Case Study-Laptop\\Movie CSV\\movies_metadata.csv")
+ratings_small<- read.csv("C:\\Users\\Angel\\Documents\\Case Study-Laptop\\Movie CSV\\ratings_small.csv")
+```
+
+## Cleaning Data
+
+As this dataset is broken down into several different .csv files, we begin by aggregating the data using relevant variables for each file.
+
+```{r}
+rating_totals <- rbind(ratings, ratings_small)
+moviedata1 <-rename(movies_metadata, movieId =id)
+moviedata2 <- merge(moviedata1, rating_totals, by= "movieId")
+```
+```{r}
+```
+
+These functions will create multiple duplicates upon merging, so we will clean this table with the following. We will also filter the data to only show high grossing revenues, as small-scale films do not need to be considered for this analysis.
+
+```{r}
+moviedata3 <- moviedata2 %>% distinct(movieId, .keep_all=TRUE)
+moviedata4 <- moviedata3 %>% filter(budget >150000 & revenue>100000)
+```
+
+Within this data set, the genres column shows at least two genres per observation cell, along with text that we don't need for our analysis. We will clean this column with the following.
+
+```{r}
+moviedata5 <- separate(moviedata4, col = genres, into= c("Category1", "Category2"), sep = "}, {")
+moviedata6 <-moviedata5
+
+moviedata6$Category1 <-gsub(".name':", "", as.character(moviedata6$Category1))
+moviedata6$Category2 <-gsub(".name':", "", as.character(moviedata6$Category2))
+moviedata6$Category1 <- sub("...", "", moviedata6$Category1)
+ moviedata6$Category2 <- sub(".........", "", moviedata6$Category2)
+ moviedata6$Category1 <- sub("}]", "", moviedata6$Category1)
+ moviedata6$Category2 <- sub("}]", "", moviedata6$Category2)
+ moviedata6$Category1 <- sub("'", "", moviedata6$Category1)
+```
+
+```{r}
+moviedata6$Category1 <- sub(".*^'", "", moviedata6$Category1)
+moviedata6$Category1 <- sub(".*?'", "", moviedata6$Category1)
+moviedata6$Category2 <- sub(".*?'", "", moviedata6$Category2)
+```
+
+ Two Categories in this filtered data frame do not contain revenue data, so we will remove those as well.
+ 
+```{r}
+moviedata6$Category1 <- sub("'", "", moviedata6$Category1)
+moviedata6$Category2 <- sub("'", "", moviedata6$Category2)
+moviedata7 <-subset(moviedata6, !(Category1 %in% c("Foreign", "TV Movie")))
+moviedata8 <- moviedata7
+moviedata9 <- moviedata8[!(is.na(moviedata8$Category1) | moviedata8$Category1==""), ]
+moviedata10 <- filter(moviedata9, Category1 !="[]" & Category2 !="")
+```
+
+## Including Plots
+
+ Now that we have a compiled and cleaned data frame, we can begin to make observations using certain columns and plotting their variables. 
+
+```{r}
+library(scales)
+```
+
+
+## Cleaned faceted plot , removing genres with small revenues
+
+```{r}
+long.df <-subset(moviedata10, select = c("Category1", "revenue", "rating"))
+cleaned.longdf <- na.omit(long.df)
+cleaned.longdf2 <- subset(cleaned.longdf, !(Category1 %in% c("Music", "History","Documentary","War","Western", "Family", "Fantasy", "Romance", "Thriller","Science Fiction", "Mystery")))
+```
+```{r}
+facetedplot <- ggplot(data = as.data.frame(cleaned.longdf2), 
+               aes(x = rating, y= revenue,)) + 
+    geom_bar(stat='identity') + 
+    facet_grid(~Category1) + theme_tufte()
+```
+```{r}
+facetedplot2 <- facetedplot + scale_y_continuous(labels=comma) + scale_x_continuous(limits= c(0,5), breaks= c(1,2,3,4,5))
+
+facetedplot3 <- facetedplot2 + labs(title="Average Revenues per movie Genre", subtitle ="Data from Dec 1874 to Dec 2020", caption="Some genres excluded due to insufficient data")
+
+```
+
+
+
+```{r}
+totalrevenuepergenredf <- cleaned.longdf2 %>% group_by(Category1, rating) %>% summarise(total = sum(revenue, rm.ra=TRUE))
+
+averagebyratingdf<- cleaned.longdf2 %>% group_by(Category1, rating) %>% summarise(Average = mean(revenue, rm.ra=TRUE))
+
+averagebygenredf <- cleaned.longdf2 %>% group_by(Category1) %>% summarise(Average = mean(revenue, rm.ra=TRUE))
+
+facetedplot3
+```
+
+
+ Looking at this plot we can see a pattern showing the highest revenues within the 3-4 viewer rating for most genres. When disregarding rating, Adventure films amassed the highest average revenue at 268,283,544. Within that genre, films at a 4.0 rating grossed the highest total revenue  with a sum of 9,347,230,209. However, animation at a 4.0 rating earned the highest average revenue out of all genres/ratings sitting at 525,458,876.
+
+With this analysis we can conclude that theatres can expect Animation films at a 4.0 rating to produce the highest Revenue average per individual film, but will likely sell more Adventure films than any other genre.
+```
+
